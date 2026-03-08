@@ -11,8 +11,15 @@ var builder = WebApplication.CreateBuilder(args);
 // 1. Add Database Context
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(connectionString));
-
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"),
+    sqlServerOptionsAction: sqlOptions =>
+    {
+        // This tells EF Core to retry if Azure SQL is busy or "waking up"
+        sqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 5,
+            maxRetryDelay: TimeSpan.FromSeconds(30),
+            errorNumbersToAdd: null);
+    }));
 builder.Services.AddScoped<IAiAssistantService, AiAssistantService>();
 
 // --- ADD JWT AUTHENTICATION ---
