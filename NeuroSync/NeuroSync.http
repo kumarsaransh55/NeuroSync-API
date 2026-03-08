@@ -1,6 +1,6 @@
 @NeuroSync_HostAddress = http://localhost:5222
 
-GET {{NeuroSync_HostAddress}}/weatherforecast/
+GET {{NeuroSync_HostAddress}}/api/tasks/123
 Accept: application/json
 
 ###
