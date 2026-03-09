@@ -69,23 +69,33 @@ public class AuthController : ControllerBase
 
     private string GenerateJwtToken(User user)
     {
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_config["Jwt:Key"]!));
-        var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var jwtHandler = new JwtSecurityTokenHandler();
 
-        var claims = new[]
+        // 1. Get the Secret Key from appsettings
+        var key = Encoding.UTF8.GetBytes(_config["Jwt:Key"]!);
+
+        // 2. Define what is INSIDE the token (Claims)
+        var tokenDescriptor = new SecurityTokenDescriptor
         {
-            new Claim(ClaimTypes.NameIdentifier, user.Id), // Stores the UserId inside the token!
-            new Claim(ClaimTypes.Email, user.Email)
+            Subject = new ClaimsIdentity(new[]
+            {
+            new Claim(ClaimTypes.NameIdentifier, user.Id),
+            new Claim(ClaimTypes.Email, user.Email),
+            new Claim(ClaimTypes.Name, user.FullName)
+        }),
+            Expires = DateTime.UtcNow.AddDays(7),
+            Issuer = _config["Jwt:Issuer"],
+            Audience = _config["Jwt:Audience"],
+            // 3. This creates the MISSING HEADER and SIGNATURE
+            SigningCredentials = new SigningCredentials(
+                new SymmetricSecurityKey(key),
+                SecurityAlgorithms.HmacSha256Signature)
         };
 
-        var token = new JwtSecurityToken(
-            issuer: _config["Jwt:Issuer"],
-            audience: _config["Jwt:Audience"],
-            claims: claims,
-            expires: DateTime.UtcNow.AddDays(7), // Token lasts for 7 days
-            signingCredentials: creds
-        );
+        // 4. Create the token object
+        var token = jwtHandler.CreateToken(tokenDescriptor);
 
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        // 5. Turn it into the final 3-part string (2 dots!)
+        return jwtHandler.WriteToken(token);
     }
 }

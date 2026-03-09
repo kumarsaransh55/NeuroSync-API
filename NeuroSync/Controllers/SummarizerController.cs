@@ -20,7 +20,7 @@ public class SummarizerController : ControllerBase
     [HttpPost("analyze")]
     public async Task<IActionResult> AnalyzeText([FromBody] string rawDocument)
     {
-        var result = "";//await _ai.SummarizeDocumentAsync(rawDocument);
+        var result = await _ai.SummarizeDocumentAsync(rawDocument);
         return Ok(result);
     }
 }

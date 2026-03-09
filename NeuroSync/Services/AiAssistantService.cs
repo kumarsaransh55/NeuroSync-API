@@ -9,7 +9,7 @@ namespace NeuroSync.Api.Services;
 public class AiAssistantService : IAiAssistantService
 {
     private readonly string _apiKey;
-    private readonly string _modelName = "gemini-3-flash-preview"; // Or gemini-2.0-flash-exp
+    private readonly string _modelName = "gemini-3-flash-preview";
 
     public AiAssistantService(IConfiguration config)
     {
@@ -74,14 +74,58 @@ public class AiAssistantService : IAiAssistantService
     // You can implement the SummarizeDocument method similarly using the SDK
     public async Task<DocumentAnalysisResult> SummarizeDocumentAsync(string documentText)
     {
-        var client = new Client( apiKey: _apiKey);
-        var prompt = $"Summarize this for a person with Dyslexia, use bullet points: {documentText}";
+        var client = new Client(apiKey: _apiKey);
 
-        var response = await client.Models.GenerateContentAsync(_modelName, prompt);
+        // 1. Create a detailed prompt for Dyslexia and ADHD support
+        var prompt = $@"
+    You are a Dyslexia-friendly Document Assistant. 
+    Analyze the following text: ""{documentText}""
 
-        return new DocumentAnalysisResult
+    Respond ONLY in valid JSON format with the following fields:
+    - summary: A 2-3 sentence overview using very simple words.
+    - actionItems: A list of specific tasks found in the text.
+    - deadline: Any date or time mentioned. If none, say 'No specific deadline'.
+    - tone: Describe the mood (e.g., Urgent, Supportive, Professional, Demanding).
+    - simplifiedText: Rewrite the original content for someone with Dyslexia.
+      Use: 
+      - Very short sentences. 
+      - Clear headings. 
+      - Bullet points for lists. 
+      - No complex vocabulary.
+
+    JSON Structure:
+    {{
+        ""summary"": ""string"",
+        ""actionItems"": [""string"", ""string""],
+        ""deadline"": ""string"",
+        ""tone"": ""string"",
+        ""simplifiedText"": ""string""
+    }}";
+
+        // 2. Configure Gemini for JSON Output
+        var config = new GenerateContentConfig
         {
-            Summary = response.Candidates[0].Content.Parts[0].Text
+            ResponseMimeType = "application/json",
+            Temperature = 0.5f // Lower temperature for more factual extraction
         };
+
+        // 3. Call Gemini
+        var response = await client.Models.GenerateContentAsync(
+            model: _modelName,
+            contents: prompt,
+            config: config
+        );
+
+        // 4. Extract and Parse the JSON
+        var jsonText = response.Candidates[0].Content.Parts[0].Text;
+
+        if (string.IsNullOrEmpty(jsonText))
+            return new DocumentAnalysisResult { Summary = "Error: AI returned empty content." };
+
+        // Use CaseInsensitive options because JSON keys might be lowercase
+        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+        return JsonSerializer.Deserialize<DocumentAnalysisResult>(jsonText, options)
+               ?? new DocumentAnalysisResult();
     }
 }
