@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using NeuroSync.Api.Data;
@@ -27,7 +27,7 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Register([FromBody] UserRegisterRequest request)
     {
         if (await _db.Users.AnyAsync(u => u.Email == request.Email))
-            return BadRequest("User already exists.");
+            return BadRequest(new { message = "An account with this email already exists." });
 
         var user = new User
         {
@@ -40,7 +40,7 @@ public class AuthController : ControllerBase
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
-        return Ok("User registered successfully.");
+        return Ok(new { message = "User registered successfully." });
     }
 
     [HttpPost("login")]
@@ -50,21 +50,25 @@ public class AuthController : ControllerBase
 
         // Check if user exists AND if the password matches the hash
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-            return Unauthorized("Invalid credentials.");
+            return Unauthorized(new { message = "Invalid email or password." });
 
         // Generate the VIP Pass (JWT Token)
         var token = GenerateJwtToken(user);
 
+        // Set an HttpOnly cookie for same-site web clients (best XSS protection).
+        // SameSite=None (with Secure) lets the token also reach a cross-origin SPA.
         var cookieOptions = new CookieOptions
         {
-            HttpOnly = true,   // JavaScript cannot read this (XSS protection)
-            Secure = true,     // Only send over HTTPS (Azure supports this)
-            SameSite = SameSiteMode.Strict, // Protects against CSRF
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.None,
             Expires = DateTime.UtcNow.AddDays(7)
         };
         Response.Cookies.Append("neurosync_jwt", token, cookieOptions);
 
-        return Ok(new {UserName = user.FullName });
+        // ALSO return the token in the body so a cross-origin SPA can store it and
+        // send it as an "Authorization: Bearer <token>" header on later requests.
+        return Ok(new { userName = user.FullName, token });
     }
 
     private string GenerateJwtToken(User user)

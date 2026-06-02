@@ -20,7 +20,17 @@ public class SummarizerController : ControllerBase
     [HttpPost("analyze")]
     public async Task<IActionResult> AnalyzeText([FromBody] string rawDocument)
     {
-        var result = await _ai.SummarizeDocumentAsync(rawDocument);
-        return Ok(result);
+        if (string.IsNullOrWhiteSpace(rawDocument))
+            return BadRequest(new { message = "Please provide some text to analyze." });
+
+        try
+        {
+            var result = await _ai.SummarizeDocumentAsync(rawDocument);
+            return Ok(result);
+        }
+        catch (Exception)
+        {
+            return StatusCode(502, new { message = "The AI service is busy right now. Please try again in a moment." });
+        }
     }
 }

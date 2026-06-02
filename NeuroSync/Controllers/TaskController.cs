@@ -27,8 +27,20 @@ public class TasksController : ControllerBase
 
     public async Task<IActionResult> CreateTaskFromText([FromBody] CreateTaskRequest request)
     {
+        if (string.IsNullOrWhiteSpace(request.RawText))
+            return BadRequest(new { message = "Please enter a task to break down." });
+
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-        var aiResult = await _ai.BreakTaskIntoMicroStepsAsync(request.RawText);
+
+        AiTaskBreakdownResponse aiResult;
+        try
+        {
+            aiResult = await _ai.BreakTaskIntoMicroStepsAsync(request.RawText);
+        }
+        catch (Exception)
+        {
+            return StatusCode(502, new { message = "The AI service is busy right now. Please try again in a moment." });
+        }
 
         var task = new TaskItem
         {

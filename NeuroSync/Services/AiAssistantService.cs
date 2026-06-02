@@ -33,13 +33,14 @@ public class AiAssistantService : IAiAssistantService
             ""steps"": [
                 {{
                     ""heading"": ""Action heading"",
-                    ""description"": ""Simple clear instructions sufficient detail"",
+                    ""description"": ""Simple, clear instructions with sufficient detail"",
                     ""estimatedMinutes"": 5
                 }}
             ]
         }}
-        
+
         Rules:
+        - Break the task into 3 to 7 clear, ordered steps.
         - estimatedMinutes must be a whole NUMBER.
         - Use simple, scan-friendly language for neurodiverse users.";
 
@@ -83,14 +84,16 @@ public class AiAssistantService : IAiAssistantService
 
     Respond ONLY in valid JSON format with the following fields:
     - summary: A 2-3 sentence overview using very simple words.
-    - actionItems: A list of specific tasks found in the text.
+    - actionItems: A list of specific, explicit tasks found in the text.
     - deadline: Any date or time mentioned. If none, say 'No specific deadline'.
     - tone: Describe the mood (e.g., Urgent, Supportive, Professional, Demanding).
+    - highlights: 3 to 5 very short key points (phrases, not full sentences).
+    - hiddenTasks: Tasks that are only implied, not stated directly. If none, return an empty list.
     - simplifiedText: Rewrite the original content for someone with Dyslexia.
-      Use: 
-      - Very short sentences. 
-      - Clear headings. 
-      - Bullet points for lists. 
+      Use:
+      - Very short sentences.
+      - Clear headings.
+      - Bullet points for lists.
       - No complex vocabulary.
 
     JSON Structure:
@@ -99,6 +102,8 @@ public class AiAssistantService : IAiAssistantService
         ""actionItems"": [""string"", ""string""],
         ""deadline"": ""string"",
         ""tone"": ""string"",
+        ""highlights"": [""string"", ""string""],
+        ""hiddenTasks"": [""string""],
         ""simplifiedText"": ""string""
     }}";
 

@@ -22,6 +22,27 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     }));
 builder.Services.AddScoped<IAiAssistantService, AiAssistantService>();
 
+// --- CORS: allow the React frontend (running in the browser) to call this API ---
+// Origins are configurable via "Cors:AllowedOrigins" in appsettings; the defaults
+// cover the local Vite dev/preview servers. Add your deployed frontend origin
+// (e.g. your Static Web App / Azure URL) here or in config before going live.
+var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+    ?? new[]
+    {
+        "http://localhost:5173",   // Vite dev server
+        "http://127.0.0.1:5173",
+        "http://localhost:4173",   // Vite preview
+        "http://localhost:3000"
+    };
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("NeuroSyncCors", policy =>
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials());
+});
+
 // --- ADD JWT AUTHENTICATION ---
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -40,7 +61,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnMessageReceived = context =>
             {
-                context.Token = context.Request.Cookies["neurosync_jwt"];
+                // Prefer the HttpOnly cookie (best for a same-site web app). If it
+                // isn't present (e.g. a cross-origin SPA where the cookie can't be
+                // sent), fall back to the standard Authorization: Bearer <token>
+                // header. Leaving context.Token null lets JwtBearer read the header.
+                var cookieToken = context.Request.Cookies["neurosync_jwt"];
+                if (!string.IsNullOrEmpty(cookieToken))
+                {
+                    context.Token = cookieToken;
+                }
                 return Task.CompletedTask;
             }
         };
@@ -91,6 +120,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// CORS must run before authentication so preflight (OPTIONS) requests succeed.
+app.UseCors("NeuroSyncCors");
+
 app.UseAuthentication();
 app.UseAuthorization();
 
