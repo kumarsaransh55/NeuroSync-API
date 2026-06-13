@@ -1,25 +1,40 @@
-using Google.GenAI;
-using Google.GenAI.Types;
-using Microsoft.Extensions.Configuration;
+using System.ClientModel;
 using System.Text.Json;
+using Azure.AI.OpenAI;
 using NeuroSync.Api.DTOs;
+using OpenAI.Chat;
 
 namespace NeuroSync.Api.Services;
 
-public class AiAssistantService : IAiAssistantService
+// Azure OpenAI implementation of the AI assistant. Used in production (more
+// reliable + keeps data in-tenant than the public Gemini API). Selected in
+// Program.cs when "AzureOpenAI:Endpoint" is configured.
+public class AzureOpenAiAssistantService : IAiAssistantService
 {
-    private readonly string _apiKey;
-    private readonly string _modelName = "gemini-3-flash-preview";
+    private readonly ChatClient _chat;
+    private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true };
 
-    public AiAssistantService(IConfiguration config)
+    public AzureOpenAiAssistantService(IConfiguration config)
     {
-        _apiKey = config["Gemini:ApiKey"] ?? throw new ArgumentNullException("Gemini API Key missing");
+        var endpoint = config["AzureOpenAI:Endpoint"] ?? throw new ArgumentNullException("AzureOpenAI:Endpoint missing");
+        var apiKey = config["AzureOpenAI:ApiKey"] ?? throw new ArgumentNullException("AzureOpenAI:ApiKey missing");
+        var deployment = config["AzureOpenAI:Deployment"] ?? "gpt-4o-mini";
+
+        var client = new AzureOpenAIClient(new Uri(endpoint), new ApiKeyCredential(apiKey));
+        _chat = client.GetChatClient(deployment);
+    }
+
+    private async Task<string> CompleteJsonAsync(string prompt)
+    {
+        var options = new ChatCompletionOptions { ResponseFormat = ChatResponseFormat.CreateJsonObjectFormat() };
+        var messages = new List<ChatMessage> { new UserChatMessage(prompt) };
+        ClientResult<ChatCompletion> result = await _chat.CompleteChatAsync(messages, options);
+        var content = result.Value.Content;
+        return content.Count > 0 ? content[0].Text : string.Empty;
     }
 
     public async Task<AiTaskBreakdownResponse> BreakTaskIntoMicroStepsAsync(string rawTaskText, string personalization = "")
     {
-        var client = new Client(apiKey: _apiKey);
-
         var prompt = $@"
         You are an expert ADHD Productivity Coach.
         Take this input: ""{rawTaskText}""
@@ -42,21 +57,13 @@ public class AiAssistantService : IAiAssistantService
         - estimatedMinutes must be a whole NUMBER.
         - Use simple, scan-friendly language for neurodiverse users.{personalization}";
 
-        var config = new GenerateContentConfig { ResponseMimeType = "application/json", Temperature = 0.7f };
-        var response = await client.Models.GenerateContentAsync(model: _modelName, contents: prompt, config: config);
-        var jsonText = response.Candidates[0].Content.Parts[0].Text;
-
-        if (string.IsNullOrEmpty(jsonText))
-            throw new Exception("AI returned an empty response.");
-
-        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        return JsonSerializer.Deserialize<AiTaskBreakdownResponse>(jsonText, options) ?? new AiTaskBreakdownResponse();
+        var json = await CompleteJsonAsync(prompt);
+        if (string.IsNullOrEmpty(json)) throw new Exception("AI returned an empty response.");
+        return JsonSerializer.Deserialize<AiTaskBreakdownResponse>(json, JsonOpts) ?? new AiTaskBreakdownResponse();
     }
 
     public async Task<DocumentAnalysisResult> SummarizeDocumentAsync(string documentText, string personalization = "")
     {
-        var client = new Client(apiKey: _apiKey);
-
         var prompt = $@"
     You are a Dyslexia-friendly Document Assistant.
     Analyze the following text: ""{documentText}""
@@ -86,20 +93,13 @@ public class AiAssistantService : IAiAssistantService
         ""simplifiedText"": ""string""
     }}{personalization}";
 
-        var config = new GenerateContentConfig { ResponseMimeType = "application/json", Temperature = 0.5f };
-        var response = await client.Models.GenerateContentAsync(model: _modelName, contents: prompt, config: config);
-        var jsonText = response.Candidates[0].Content.Parts[0].Text;
-
-        if (string.IsNullOrEmpty(jsonText))
-            return new DocumentAnalysisResult { Summary = "Error: AI returned empty content." };
-
-        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        return JsonSerializer.Deserialize<DocumentAnalysisResult>(jsonText, options) ?? new DocumentAnalysisResult();
+        var json = await CompleteJsonAsync(prompt);
+        if (string.IsNullOrEmpty(json)) return new DocumentAnalysisResult { Summary = "Error: AI returned empty content." };
+        return JsonSerializer.Deserialize<DocumentAnalysisResult>(json, JsonOpts) ?? new DocumentAnalysisResult();
     }
 
     public async Task<AiTaskBreakdownResponse> BuildTaskFromActionsAsync(string documentText, List<string> actionItems, string personalization = "")
     {
-        var client = new Client(apiKey: _apiKey);
         var items = string.Join("\n", actionItems.Select((a, i) => $"{i + 1}. {a}"));
 
         var prompt = $@"
@@ -127,14 +127,8 @@ public class AiAssistantService : IAiAssistantService
         - estimatedMinutes must be a whole NUMBER.
         - Use simple, scan-friendly language for neurodiverse users.{personalization}";
 
-        var config = new GenerateContentConfig { ResponseMimeType = "application/json", Temperature = 0.6f };
-        var response = await client.Models.GenerateContentAsync(model: _modelName, contents: prompt, config: config);
-        var jsonText = response.Candidates[0].Content.Parts[0].Text;
-
-        if (string.IsNullOrEmpty(jsonText))
-            throw new Exception("AI returned an empty response.");
-
-        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        return JsonSerializer.Deserialize<AiTaskBreakdownResponse>(jsonText, options) ?? new AiTaskBreakdownResponse();
+        var json = await CompleteJsonAsync(prompt);
+        if (string.IsNullOrEmpty(json)) throw new Exception("AI returned an empty response.");
+        return JsonSerializer.Deserialize<AiTaskBreakdownResponse>(json, JsonOpts) ?? new AiTaskBreakdownResponse();
     }
 }

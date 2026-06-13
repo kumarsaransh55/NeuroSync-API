@@ -11,4 +11,7 @@ public class UserSettings
     public string Theme { get; set; } = "Light";
     public string NotificationSensitivity { get; set; } = "Normal";
     public bool VisualReminders { get; set; } = true;
+
+    // The full settings + personalization profile as JSON (flexible, no schema churn).
+    public string PreferencesJson { get; set; } = "{}";
 }

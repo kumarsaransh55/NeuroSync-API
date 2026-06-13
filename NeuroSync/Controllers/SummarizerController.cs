@@ -1,7 +1,9 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using NeuroSync.Api.DTOs;
+using Microsoft.EntityFrameworkCore;
+using NeuroSync.Api.Data;
 using NeuroSync.Api.Services;
+using System.Security.Claims;
 
 namespace NeuroSync.Api.Controllers;
 
@@ -11,10 +13,12 @@ namespace NeuroSync.Api.Controllers;
 public class SummarizerController : ControllerBase
 {
     private readonly IAiAssistantService _ai;
+    private readonly AppDbContext _db;
 
-    public SummarizerController(IAiAssistantService ai)
+    public SummarizerController(IAiAssistantService ai, AppDbContext db)
     {
         _ai = ai;
+        _db = db;
     }
 
     [HttpPost("analyze")]
@@ -25,7 +29,11 @@ public class SummarizerController : ControllerBase
 
         try
         {
-            var result = await _ai.SummarizeDocumentAsync(rawDocument);
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var settings = await _db.UserSettings.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == userId);
+            var personalization = PersonalizationHelper.Build(settings?.PreferencesJson);
+
+            var result = await _ai.SummarizeDocumentAsync(rawDocument, personalization);
             return Ok(result);
         }
         catch (Exception)

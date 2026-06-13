@@ -23,6 +23,14 @@ public class TasksController : ControllerBase
         _ai = ai;
     }
 
+    // Build the per-user personalization instruction for the current user.
+    private async Task<string> GetPersonalizationAsync()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        var settings = await _db.UserSettings.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == userId);
+        return PersonalizationHelper.Build(settings?.PreferencesJson);
+    }
+
     [HttpPost("create-task")]
 
     public async Task<IActionResult> CreateTaskFromText([FromBody] CreateTaskRequest request)
@@ -35,7 +43,7 @@ public class TasksController : ControllerBase
         AiTaskBreakdownResponse aiResult;
         try
         {
-            aiResult = await _ai.BreakTaskIntoMicroStepsAsync(request.RawText);
+            aiResult = await _ai.BreakTaskIntoMicroStepsAsync(request.RawText, await GetPersonalizationAsync());
         }
         catch (Exception)
         {
@@ -182,12 +190,63 @@ public class TasksController : ControllerBase
             return BadRequest(new { message = "Nothing to break down." });
         try
         {
-            var result = await _ai.BreakTaskIntoMicroStepsAsync(request.RawText);
+            var result = await _ai.BreakTaskIntoMicroStepsAsync(request.RawText, await GetPersonalizationAsync());
             return Ok(result);
         }
         catch (Exception)
         {
             return StatusCode(502, new { message = "The AI service is busy right now. Please try again in a moment." });
         }
+    }
+
+    // Convert a set of action items (from the summarizer) into ONE task: the AI
+    // names the overall task and writes a context-aware description for each
+    // action item (which become the subtask headings, kept verbatim).
+    [HttpPost("from-actions")]
+    public async Task<IActionResult> CreateFromActions([FromBody] TaskFromActionsRequest request)
+    {
+        if (request.ActionItems == null || request.ActionItems.Count == 0)
+            return BadRequest(new { message = "No action items to convert." });
+
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        AiTaskBreakdownResponse aiResult;
+        try
+        {
+            aiResult = await _ai.BuildTaskFromActionsAsync(request.RawText ?? string.Empty, request.ActionItems, await GetPersonalizationAsync());
+        }
+        catch (Exception)
+        {
+            return StatusCode(502, new { message = "The AI service is busy right now. Please try again in a moment." });
+        }
+
+        var task = new TaskItem
+        {
+            UserId = userId!,
+            OriginalSourceText = request.RawText ?? string.Empty,
+            Title = string.IsNullOrWhiteSpace(aiResult.TaskTitle) ? "Tasks from summary" : aiResult.TaskTitle,
+            Summary = aiResult.TaskSummary,
+            ProjectId = request.ProjectId,
+            TotalMinutes = 0
+        };
+
+        int total = 0;
+        for (int i = 0; i < aiResult.Steps.Count; i++)
+        {
+            var s = aiResult.Steps[i];
+            total += s.EstimatedMinutes;
+            task.MicroSteps.Add(new TaskStep
+            {
+                Heading = s.Heading,
+                Description = s.Description,
+                EstimatedMinutes = s.EstimatedMinutes,
+                OrderIndex = i
+            });
+        }
+        task.TotalMinutes = total;
+
+        _db.Tasks.Add(task);
+        await _db.SaveChangesAsync();
+        return Ok(task);
     }
 }
