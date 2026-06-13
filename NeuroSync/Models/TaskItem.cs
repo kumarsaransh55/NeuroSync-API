@@ -14,6 +14,7 @@ public class TaskItem
     public DateTime? SuggestedDeadline { get; set; }
     public bool IsInFocusMode { get; set; } = false;
     public int ProgressPercentage { get; set; } = 0;
+    public int? ProjectId { get; set; } // optional: which project this task belongs to
 
     // Relationships
     public List<TaskStep> MicroSteps { get; set; } = new();

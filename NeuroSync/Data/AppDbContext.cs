@@ -13,4 +13,5 @@ public class AppDbContext : DbContext
     public DbSet<TaskStep> TaskSteps { get; set; }
     public DbSet<Reminder> Reminders { get; set; }
     public DbSet<User> Users { get; set; }
+    public DbSet<Project> Projects { get; set; }
 }

@@ -5,6 +5,7 @@ public class QuickCreateRequest
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? DueDate { get; set; }
+    public int? ProjectId { get; set; }
 }
 
 public class TaskStepDto
@@ -22,5 +23,6 @@ public class UpdateTaskRequest
     public string? Summary { get; set; }
     public int ProgressPercentage { get; set; }
     public string? DueDate { get; set; }
+    public int? ProjectId { get; set; }
     public List<TaskStepDto> Steps { get; set; } = new();
 }

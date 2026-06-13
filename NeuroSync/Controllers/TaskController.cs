@@ -48,6 +48,7 @@ public class TasksController : ControllerBase
             OriginalSourceText = request.RawText,
             Title = aiResult.TaskTitle,
             Summary = aiResult.TaskSummary,
+            ProjectId = request.ProjectId,
             TotalMinutes = 0 // Will update this in a second
         };
 
@@ -108,6 +109,7 @@ public class TasksController : ControllerBase
             TotalMinutes = 0
         };
         if (DateTime.TryParse(request.DueDate, out var quickDue)) task.SuggestedDeadline = quickDue;
+        task.ProjectId = request.ProjectId;
         _db.Tasks.Add(task);
         await _db.SaveChangesAsync();
         return Ok(task);
@@ -128,6 +130,7 @@ public class TasksController : ControllerBase
         task.ProgressPercentage = request.ProgressPercentage;
         if (!string.IsNullOrWhiteSpace(request.DueDate) && DateTime.TryParse(request.DueDate, out var due))
             task.SuggestedDeadline = due;
+        task.ProjectId = request.ProjectId;
 
         // Replace the existing steps with the incoming set.
         var existing = task.MicroSteps.ToList();
