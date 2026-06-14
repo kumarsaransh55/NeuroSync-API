@@ -20,7 +20,12 @@ builder.Services.AddDbContext<AppDbContext>(options =>
             maxRetryDelay: TimeSpan.FromSeconds(30),
             errorNumbersToAdd: null);
     }));
-builder.Services.AddScoped<IAiAssistantService, AiAssistantService>();
+// Pick the AI backend: use Azure OpenAI when it's configured (keeps data
+// in-tenant), otherwise fall back to the Gemini implementation.
+if (!string.IsNullOrWhiteSpace(builder.Configuration["AzureOpenAI:Endpoint"]))
+    builder.Services.AddScoped<IAiAssistantService, AzureOpenAiAssistantService>();
+else
+    builder.Services.AddScoped<IAiAssistantService, AiAssistantService>();
 
 // --- CORS: allow the React frontend (running in the browser) to call this API ---
 // Origins are configurable via "Cors:AllowedOrigins" in appsettings; the defaults
