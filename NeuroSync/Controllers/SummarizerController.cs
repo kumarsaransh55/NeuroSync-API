@@ -14,11 +14,13 @@ public class SummarizerController : ControllerBase
 {
     private readonly IAiAssistantService _ai;
     private readonly AppDbContext _db;
+    private readonly ILogger<SummarizerController> _logger;
 
-    public SummarizerController(IAiAssistantService ai, AppDbContext db)
+    public SummarizerController(IAiAssistantService ai, AppDbContext db, ILogger<SummarizerController> logger)
     {
         _ai = ai;
         _db = db;
+        _logger = logger;
     }
 
     [HttpPost("analyze")]
@@ -36,8 +38,11 @@ public class SummarizerController : ControllerBase
             var result = await _ai.SummarizeDocumentAsync(rawDocument, personalization);
             return Ok(result);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            // Log the REAL error (status code, deployment-not-found, auth, etc.).
+            // Visible in Azure App Service → Log stream / Application Insights.
+            _logger.LogError(ex, "Summarizer AnalyzeText failed");
             return StatusCode(502, new { message = "The AI service is busy right now. Please try again in a moment." });
         }
     }

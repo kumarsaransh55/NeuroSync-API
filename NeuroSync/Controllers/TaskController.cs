@@ -16,11 +16,13 @@ public class TasksController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IAiAssistantService _ai;
+    private readonly ILogger<TasksController> _logger;
 
-    public TasksController(AppDbContext db, IAiAssistantService ai)
+    public TasksController(AppDbContext db, IAiAssistantService ai, ILogger<TasksController> logger)
     {
         _db = db;
         _ai = ai;
+        _logger = logger;
     }
 
     // Build the per-user personalization instruction for the current user.
@@ -45,8 +47,11 @@ public class TasksController : ControllerBase
         {
             aiResult = await _ai.BreakTaskIntoMicroStepsAsync(request.RawText, await GetPersonalizationAsync());
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            // Log the REAL error (status code, deployment-not-found, auth, etc.).
+            // Visible in Azure App Service → Log stream / Application Insights.
+            _logger.LogError(ex, "Tasks AI call failed");
             return StatusCode(502, new { message = "The AI service is busy right now. Please try again in a moment." });
         }
 
@@ -193,8 +198,11 @@ public class TasksController : ControllerBase
             var result = await _ai.BreakTaskIntoMicroStepsAsync(request.RawText, await GetPersonalizationAsync());
             return Ok(result);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            // Log the REAL error (status code, deployment-not-found, auth, etc.).
+            // Visible in Azure App Service → Log stream / Application Insights.
+            _logger.LogError(ex, "Tasks AI call failed");
             return StatusCode(502, new { message = "The AI service is busy right now. Please try again in a moment." });
         }
     }
@@ -215,8 +223,11 @@ public class TasksController : ControllerBase
         {
             aiResult = await _ai.BuildTaskFromActionsAsync(request.RawText ?? string.Empty, request.ActionItems, await GetPersonalizationAsync());
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            // Log the REAL error (status code, deployment-not-found, auth, etc.).
+            // Visible in Azure App Service → Log stream / Application Insights.
+            _logger.LogError(ex, "Tasks AI call failed");
             return StatusCode(502, new { message = "The AI service is busy right now. Please try again in a moment." });
         }
 

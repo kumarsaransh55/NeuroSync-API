@@ -22,7 +22,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     }));
 // Pick the AI backend: use Azure OpenAI when it's configured (keeps data
 // in-tenant), otherwise fall back to the Gemini implementation.
-if (!string.IsNullOrWhiteSpace(builder.Configuration["AzureOpenAI:Endpoint"]))
+var useAzureOpenAI = !string.IsNullOrWhiteSpace(builder.Configuration["AzureOpenAI:Endpoint"]);
+if (useAzureOpenAI)
     builder.Services.AddScoped<IAiAssistantService, AzureOpenAiAssistantService>();
 else
     builder.Services.AddScoped<IAiAssistantService, AiAssistantService>();
@@ -109,6 +110,14 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+// Startup breadcrumb: confirms WHICH AI backend was actually selected. If this
+// logs "Gemini" while you expect Azure, the AzureOpenAI:Endpoint app setting
+// isn't being read (check the env var name uses double underscores).
+app.Logger.LogInformation(
+    "AI provider selected: {Provider} (AzureOpenAI:Endpoint is {State})",
+    useAzureOpenAI ? "AzureOpenAI" : "Gemini",
+    useAzureOpenAI ? "configured" : "MISSING");
 
 using (var scope = app.Services.CreateScope())
 {
