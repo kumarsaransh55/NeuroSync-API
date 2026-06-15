@@ -71,6 +71,35 @@ public class AuthController : ControllerBase
         return Ok(new { userName = user.FullName, token });
     }
 
+    [HttpPost("guest")]
+    public async Task<IActionResult> Guest()
+    {
+        // Create a throwaway guest account so demo users (and judges) can try the
+        // FULL app — including the AI features that need a token — without signing
+        // up. Each guest gets their own isolated user so tasks/settings never clash.
+        var guest = new User
+        {
+            FullName = "Guest",
+            Email = $"guest_{Guid.NewGuid():N}@neurosync.guest",
+            PasswordHash = string.Empty
+        };
+        _db.Users.Add(guest);
+        await _db.SaveChangesAsync();
+
+        var token = GenerateJwtToken(guest);
+
+        var cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.None,
+            Expires = DateTime.UtcNow.AddDays(1)
+        };
+        Response.Cookies.Append("neurosync_jwt", token, cookieOptions);
+
+        return Ok(new { userName = guest.FullName, token });
+    }
+
     private string GenerateJwtToken(User user)
     {
         var jwtHandler = new JwtSecurityTokenHandler();
