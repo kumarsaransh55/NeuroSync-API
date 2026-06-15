@@ -43,7 +43,14 @@ var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("NeuroSyncCors", policy =>
-        policy.WithOrigins(allowedOrigins)
+        policy.SetIsOriginAllowed(origin =>
+              {
+                  if (allowedOrigins.Contains(origin)) return true;
+                  // Allow the deployed frontend on Azure Static Web Apps without
+                  // hard-coding its (region-coded) hostname.
+                  try { return new Uri(origin).Host.EndsWith(".azurestaticapps.net", StringComparison.OrdinalIgnoreCase); }
+                  catch { return false; }
+              })
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials());
